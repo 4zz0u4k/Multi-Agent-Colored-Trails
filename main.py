@@ -1,14 +1,22 @@
 from model import ColoredTrailsModel
-
+from vizualisation import ColoredTrailsViz
 def run_game(steps=50):
     """Run a game and return results"""
     model = ColoredTrailsModel()
+    viz = ColoredTrailsViz(model)
     
-    for i in range(steps):
+    # Show initial state
+    viz.visualize_step(0)
+    
+    for i in range(1, steps):
         model.step()
+        viz.visualize_step(i)  # Show AFTER step
+        
         winner = model.get_winner()
         if winner:
             print(f"Game ended at step {i}! Agent {winner.unique_id} won!")
+            break
+        elif model.agent_stuck:
             break
     else:
         print(f"Game ended after {steps} steps with no winner")

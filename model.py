@@ -23,7 +23,7 @@ class ColoredTrailsModel(mesa.Model):
         # Create agents with different strategies
         self.offers_pool = []
         self.create_agents()
-        
+        self.agent_stuck = False
         # Data collection
         self.datacollector = mesa.DataCollector(
             agent_reporters={
@@ -42,24 +42,24 @@ class ColoredTrailsModel(mesa.Model):
     
     def create_agents(self):
         """Create agents with different strategies"""
-        strategies = [GreedyStrategy(), CooperativeStrategy(), GreedyStrategy()]
+        strategies = [GreedyStrategy(), CooperativeStrategy(), CooperativeStrategy()]
         
         # Define start and goal positions
         goal = (self.width-1, self.height-1)
         positions = [
-            ((0, 0), goal),
-            ((0, self.height-1), goal),
-            ((self.width//2, 0), goal)
+            (self.width-1, 0),
+            (0, self.height-1),
+            (0, 0)
         ]
         
         for i in range(3):
-            start_pos, goal_pos = positions[i]
-            agent = ColoredTrailsAgent(self, strategies[i], start_pos, goal_pos)
+            start_pos = positions[i]
+            agent = ColoredTrailsAgent(self, strategies[i], start_pos, goal)
             self.schedule.add(agent)
             self.grid.place_agent(agent, start_pos)
     
     def get_shortest_path(self, start, goal):
-        """Simple Manhattan distance path (can be improved with A*)"""
+        """Return path with only adjacent moves (Manhattan neighbors)"""
         path = [start]
         current = start
         
@@ -67,17 +67,34 @@ class ColoredTrailsModel(mesa.Model):
             x, y = current
             gx, gy = goal
             
-            # Move towards goal (Manhattan style)
-            if x < gx:
-                current = (x + 1, y)
-            elif x > gx:
-                current = (x - 1, y)
-            elif y < gy:
-                current = (x, y + 1)
-            elif y > gy:
-                current = (x, y - 1)
+            # Only move to adjacent cells (one step at a time)
+            if abs(x - gx) + abs(y - gy) == 1:
+                # Already adjacent to goal
+                path.append(goal)
+                break
             
-            path.append(current)
+            # Choose next adjacent cell toward goal
+            possible_moves = []
+            
+            # Check all 4 adjacent directions
+            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                next_x, next_y = x + dx, y + dy
+                
+                # Check bounds
+                if 0 <= next_x < self.width and 0 <= next_y < self.height:
+                    # Calculate if this move gets us closer
+                    current_distance = abs(x - gx) + abs(y - gy)
+                    new_distance = abs(next_x - gx) + abs(next_y - gy)
+                    
+                    if new_distance < current_distance:
+                        possible_moves.append((next_x, next_y))
+            
+            # Pick first valid move (or random if you want)
+            if possible_moves:
+                current = possible_moves[0]
+                path.append(current)
+            else:
+                break  # Shouldn't happen with Manhattan distance
         
         return path
     
@@ -108,7 +125,13 @@ class ColoredTrailsModel(mesa.Model):
         """Advance model by one step"""
         self.schedule.step()
         self.process_trades()
+        for agent in self.schedule.agents:
+            if agent.turns_without_moving >= 3:
+                print(f"Game ended - Agent {agent.unique_id} stuck for 3 turns")
+                self.agent_stuck = True
+                return
         self.datacollector.collect(self)
+        
     
     def get_winner(self):
         """Return winning agent if any"""

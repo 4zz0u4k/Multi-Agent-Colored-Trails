@@ -15,7 +15,8 @@ class ColoredTrailsAgent(mesa.Agent):
         self.offers_made = []
         self.offers_received = []
         self.has_won = False
-        
+        self.last_position = start_pos
+        self.turns_without_moving = 0
         # Give random starting coins
         colors = model.colors
         for _ in range(8):  # Each agent gets 8 random coins
@@ -70,22 +71,31 @@ class ColoredTrailsAgent(mesa.Agent):
             self.coins[color] -= 1
     
     def try_move_to_goal(self):
-        """Try to move towards goal if possible"""
-        path = self.model.get_shortest_path(self.pos, self.goal_pos)
+        """Try to move one step towards goal if possible"""
+        old_pos = self.pos
         
+        path = self.model.get_shortest_path(self.pos, self.goal_pos)
         if len(path) <= 1:  # Already at goal
             self.has_won = True
             return
         
-        # Try progressively shorter paths
-        for i in range(len(path), 0, -1):
-            partial_path = path[:i]
-            if self.can_afford_path(partial_path):
-                self.spend_coins_for_path(partial_path)
-                self.model.grid.move_agent(self, partial_path[-1])
-                if partial_path[-1] == self.goal_pos:
-                    self.has_won = True
-                return
+        # Try to move just one step (next position in path)
+        next_pos = path[1]  # First step toward goal
+        color_needed = self.model.grid_colors[next_pos]
+        
+        if self.coins[color_needed] > 0:
+            # Can afford this one step
+            self.coins[color_needed] -= 1
+            self.model.grid.move_agent(self, next_pos)
+            
+            if next_pos == self.goal_pos:
+                self.has_won = True
+        
+        # Update stagnation tracking
+        if self.pos == old_pos:
+            self.turns_without_moving += 1
+        else:
+            self.turns_without_moving = 0
     
     def has_coins(self, coin_dict):
         """Check if agent has required coins"""
